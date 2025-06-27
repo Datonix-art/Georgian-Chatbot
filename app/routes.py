@@ -1,4 +1,4 @@
-from flask_login import login_manager
+from flask_login import login_required
 from flask import render_template
 
 from app import create_app
@@ -16,3 +16,4 @@ def create_account():
 @app.route('/log-in')
 def login():
     return render_template('login.html')
+
