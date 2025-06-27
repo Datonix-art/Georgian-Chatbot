@@ -1,11 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signup - GeorgianBot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='auth.css') }}">
 </head>
+
 <body>
-    signup
+    <div class="container" id="form-container">
+        <h2 id="form-title">Signup</h2>
+        <form id="auth-form">
+            <input type="text" id="username" name="username" placeholder="Username" required />
+            <input type="password" id="password" name="password" placeholder="Password" required />
+            <button type="submit" id="submit-button">Signup</button>
+        </form>
+        <div class="toggle">
+            <span id="toggle-text">Already have an account?</span>
+            <a href="/log-in">Log in</a>
+        </div>
+    </div>
 </body>
+
 </html>
