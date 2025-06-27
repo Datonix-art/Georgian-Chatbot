@@ -4,4 +4,4 @@ import os
 load_dotenv()
 
 class Config:
-    SECRET_KEY: os.getenv("SECRET_KEY")
+    SECRET_KEY = os.getenv("SECRET_KEY")

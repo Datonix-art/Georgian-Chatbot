@@ -1,14 +1,17 @@
 import os
 import sqlite3
+from dotenv import load_dotenv
 
-database_dir = os.path.join(os.getcwd(), 'database')
+load_dotenv()
 
-if not os.path.exists(database_dir):
-    os.makedirs(database_dir)
+db_file_path = os.getenv('database_file')
 
-database_file_path = os.path.join(database_dir, 'database.db')
+db_dir = os.path.dirname(db_file_path)
+if not os.path.exists(db_dir):
+    os.makedirs(db_dir)
 
-conn = sqlite3.connect(database_file_path)
+
+conn = sqlite3.connect(db_file_path)
 cursor = conn.cursor()
 
 cursor.execute("""
