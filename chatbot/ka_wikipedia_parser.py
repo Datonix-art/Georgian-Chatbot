@@ -41,7 +41,7 @@ with bz2.open(file_path, 'rt', encoding='utf-8') as f:
 #* 4
 # pip install wikiextractor
 import multiprocessing
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET # or import defusedxml.ElementTree as ET if untrusted XML file (!pip install defusedxml)
 import re
 from concurrent.futures import ProcessPoolExecutor
 import wikitextparser as wtp 
@@ -55,39 +55,42 @@ def clean_wikitext(text):
         parsed = wtp.parse(text)
         
         # Remove templates
-        for template in parsed.templates:
-            template.string = ''
+        for template in list(parsed.templates):
+            if template and template.string:
+                template.string = ''
         
         # Remove tables
-        for table in parsed.tables:
-            table.string = ''
+        for table in list(parsed.tables):
+            if table and table.string:
+                table.string = ''
             
         # Remove parser functions
-        for pf in parsed.parser_functions:
-            pf.string = ''
+        for pf in list(parsed.parser_functions):
+            if pf and pf.string:
+                pf.string = ''
             
         # Remove comments
-        for comment in parsed.comments:
-            comment.string = ''
+        for comment in list(parsed.comments):
+            if comment and comment.string:
+                comment.string = ''
             
         # Convert wikilinks to plain text
-        for wikilink in parsed.wikilinks:
-            if wikilink.text:
-                wikilink.string = wikilink.text
-            elif wikilink.title:
-                wikilink.string = wikilink.title
-            else:
-                wikilink.string = ''
+        for wikilink in list(parsed.wikilinks):
+            if wikilink:
+                if wikilink.text:
+                    wikilink.string = wikilink.text
+                elif wikilink.title:
+                    wikilink.string = wikilink.title
+                else:
+                    wikilink.string = ''
         
         # Convert external links to plain text
-        for extlink in parsed.external_links:
-            if extlink.text:
-                extlink.string = extlink.text
-            else:
-                extlink.string = ''
+        for extlink in list(parsed.external_links):
+            if extlink:
+                extlink.string = extlink.text if extlink.text else ''
         
         # Get the plain text
-        plain_text = parsed.plain()
+        plain_text = parsed.string.strip()
         
     except Exception as e:
         print(f"Error parsing wikitext: {e}")
@@ -124,7 +127,7 @@ def clean_wikitext(text):
     plain_text = re.sub(r'^\s*$', '', plain_text, flags=re.MULTILINE)
     plain_text = re.sub(r'\s+', ' ', plain_text)
     
-    return plain_text.strip()
+    return plain_text
 
 def process_page(page_data):
     """Process a single Wikipedia page"""
@@ -173,7 +176,8 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     print(f"Using {max_workers} processes")
     
     # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     
     # Open the dump file
     if dump_file_path.endswith('.bz2'):
@@ -188,8 +192,8 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     
     try:
         print("Starting XML parsing...")
-        # Parse XML iteratively to handle large files
-        context = ET.iterparse(file_handle, events=('start', 'end'))
+        # Parse XML iteratively to handle large files 
+        context = ET.iterparse(file_handle, events=('start', 'end')) #Efficient memory usage: reads the XML element-by-element (not whole file).
         context = iter(context)
         event, root = next(context)
         
@@ -303,26 +307,27 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     
     return pages_saved
 
-# Get CPU count and setup output directory
-cpu_count = multiprocessing.cpu_count()
-print(f'Number of available CPU cores: {cpu_count}')
-output_dir = os.path.join(os.getcwd(), 'chatbot', 'output')
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    cpu_count = multiprocessing.cpu_count()
+    print(f'Number of available CPU cores: {cpu_count}')
+    output_dir = os.path.join(os.getcwd(), 'chatbot', 'output')
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-# Run the extraction
-print("Starting Wikipedia extraction with wikitextparser...")
-print("Make sure you have installed: pip install wikitextparser")
+    # Run the extraction
+    print("Starting Wikipedia extraction with wikitextparser...")
+    print("Make sure you have installed: pip install wikitextparser")
 
-try:
-    total_pages = parse_wikipedia_dump(file_path, output_dir, max_workers=cpu_count)
-    
-    print(f"\n=== EXTRACTION SUMMARY ===")
-    print(f"Total valid Georgian articles extracted: {total_pages}")
-    print(f"Output directory: {output_dir}")
-    print(f"Files created:")
-    print(f"- Individual batch files: georgian_wiki_batch_*.jsonl")
-    print(f"- Combined dataset: georgian_wikipedia_dataset.jsonl")
-    print(f"Ready for fine-tuning!")
-except Exception as e:
-    print(f"Error: {e}")
+    try:
+        total_pages = parse_wikipedia_dump(file_path, output_dir, max_workers=cpu_count)
+        
+        print(f"\n=== EXTRACTION SUMMARY ===")
+        print(f"Total valid Georgian articles extracted: {total_pages}")
+        print(f"Output directory: {output_dir}")
+        print(f"Files created:")
+        print(f"- Individual batch files: georgian_wiki_batch_*.jsonl")
+        print(f"- Combined dataset: georgian_wikipedia_dataset.jsonl")
+        print(f"Ready for fine-tuning!")
+    except Exception as e:
+        print(f"Error: {e}")
