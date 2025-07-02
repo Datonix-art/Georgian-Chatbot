@@ -38,8 +38,11 @@ with bz2.open(file_path, 'rt', encoding='utf-8') as f:
 
 #* 4
 # pip install wikiextractor
-
 import multiprocessing
+import xml.etree.ElementTree as ET
+import re
+from concurrent.futures import ProcessPoolExecutor
+import wikitextparser as wtp 
 
 cpu_count = multiprocessing.cpu_count()
 
