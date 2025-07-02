@@ -37,19 +37,24 @@ class GeorgianChatBot:
             return False
     
     def prepare_georgian_data(self, data_path: str) -> Dataset:
-        """prepare georgian data for training"""
+        """process georgin wikipedia JSONL files and create a single Hugging face dataset."""
+    
+        formatted_data = []
 
         with open(data_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        formatted_data = []
-        for item in data:
+            for line in f:
+                item = json.loads(line)
+    
+                formatted_data.append({
+                    "id": item.get("id"),
+                    "title": item.get("title"),
+                    "text": item.get("text"),
+                    "url": item.get("url"),
+                })
+ 
+        dataset = Dataset.from_list(formatted_data)
 
-            formatted_data.append({
-                
-            })
-
-        return Dataset(formatted_data)
+        return dataset
     
     def tokenize_data(self, dataset: Dataset) -> Dataset:
         """tokenize data for training"""
@@ -66,3 +71,11 @@ class GeorgianChatBot:
     def answer_question(self, question: str, context: str):
         """Answer question based on the given context"""
         pass
+
+if __name__ == "__main__":
+    bot = GeorgianChatBot()
+
+    dataset = bot.prepare_georgian_data(os.path.join(os.getcwd(), 'chatbot', 'output', 'georgian_wiki_dataset.jsonl'))
+    
+    print(f'Number of articles loaded {len(dataset)}')
+    print("Sample entry:", dataset[:3])
