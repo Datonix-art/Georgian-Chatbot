@@ -41,7 +41,7 @@ with bz2.open(file_path, 'rt', encoding='utf-8') as f:
 #* 4
 # pip install wikiextractor
 import multiprocessing
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET # or import defusedxml.ElementTree as ET if untrusted XML file (!pip install defusedxml)
 import re
 from concurrent.futures import ProcessPoolExecutor
 import wikitextparser as wtp 
@@ -173,7 +173,8 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     print(f"Using {max_workers} processes")
     
     # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     
     # Open the dump file
     if dump_file_path.endswith('.bz2'):
@@ -188,8 +189,8 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     
     try:
         print("Starting XML parsing...")
-        # Parse XML iteratively to handle large files
-        context = ET.iterparse(file_handle, events=('start', 'end'))
+        # Parse XML iteratively to handle large files 
+        context = ET.iterparse(file_handle, events=('start', 'end')) #Efficient memory usage: reads the XML element-by-element (not whole file).
         context = iter(context)
         event, root = next(context)
         
