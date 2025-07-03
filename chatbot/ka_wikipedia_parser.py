@@ -11,6 +11,51 @@ import os
 #
 import subprocess
 
+def download_with_verification(url, file_path, expected_size=None):
+    """Download file with verification and resume capability"""
+    if os.path.exists(file_path):
+        print(f"File {file_path} already exists. Checking integrity...")
+        try:
+            # Test if the file can be opened properly
+            if file_path.endswith('.bz2'):
+                import bz2
+                with bz2.open(file_path, 'rt', encoding='utf-8') as f:
+                    for i, line in enumerate(f):
+                        if i > 10:  # Read first 10 lines
+                            break
+                print("File integrity check passed. Skipping download.")
+                return True
+        except Exception as e:
+            print(f"File integrity check failed: {e}")
+            print("Re-downloading file...")
+            os.remove(file_path)
+    
+    print(f"Downloading {url}...")
+    
+    # Use wget with resume capability if available, otherwise use curl
+    try:
+        # Try wget first (better for large files)
+        result = subprocess.run(['wget', '-c', url, '-O', file_path], 
+                              capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception("wget failed")
+    except:
+        # Fallback to curl
+        print("Using curl for download...")
+        result = subprocess.run(['curl', '-L', '-C', '-', url, '-o', file_path], 
+                              capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Download failed: {result.stderr}")
+            return False
+    
+    # Verify download
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+        print(f"Download completed. File size: {os.path.getsize(file_path)} bytes")
+        return True
+    else:
+        print("Download failed - file not found or empty")
+        return False
+
 url = 'https://dumps.wikimedia.org/kawiki/20250620/kawiki-20250620-pages-articles.xml.bz2'
 file_name = url.split('/')[-1] # divides url var into parts by removing slash and then [-1] gets last part of divided list that is actuall filename
 folder_name = os.path.join(os.getcwd(), 'chatbot', 'input')
@@ -20,91 +65,115 @@ if not os.path.exists(folder_name):
 
 file_path = os.path.join(folder_name, file_name)
 
-if not os.path.exists(file_path):
-   print(f"{file_name} will be downloaded to {folder_name}")
-   subprocess.run(['curl', '-L', url, '-o', file_path])
-else:
-    print(f"{file_name} already exists. Skipping download")
+# Download with verification
+if not download_with_verification(url, file_path):
+    print("Failed to download file. Exiting.")
+    exit(1)
 
 #* 3
-# debugging
-import bz2
+# debugging - Test file integrity
 
-
-with bz2.open(file_path, 'rt', encoding='utf-8') as f:
-    for i, line in enumerate(f):
-        if i < 20:
-            print(line.strip())
-        else:
-            break
+print("Testing file integrity...")
+try:
+    with bz2.open(file_path, 'rt', encoding='utf-8') as f:
+        line_count = 0
+        for i, line in enumerate(f):
+            if i < 20:
+                print(f"Line {i}: {line.strip()[:100]}...")  # Show first 100 chars
+            line_count += 1
+            if i > 100:  # Test more lines
+                break
+    print(f"File integrity test passed. Read {line_count} lines successfully.")
+except Exception as e:
+    print(f"File integrity test failed: {e}")
+    print("Please re-download the file.")
+    exit(1)
 
 #* 4
-# pip install wikiextractor
+# pip install wikiextractor wikitextparser
 import multiprocessing
 import xml.etree.ElementTree as ET # or import defusedxml.ElementTree as ET if untrusted XML file (!pip install defusedxml)
 import re
 from concurrent.futures import ProcessPoolExecutor
-import wikitextparser as wtp 
 import json
+import traceback
 
+# Try to import wikitextparser, fallback to regex if not available
+try:
+    import wikitextparser as wtp
+    USE_WIKITEXTPARSER = True
+    print("Using wikitextparser for text cleaning")
+except ImportError:
+    USE_WIKITEXTPARSER = False
+    print("wikitextparser not available, using regex-based cleaning")
+    print("Install with: pip install wikitextparser")
 
 def clean_wikitext(text):
     """Clean wikitext markup using wikitextparser to extract plain text"""
-    try:
-        # Parse with wikitextparser
-        parsed = wtp.parse(text)
-        
-        # Remove templates
-        for template in list(parsed.templates):
-            if template and template.string:
-                template.string = ''
-        
-        # Remove tables
-        for table in list(parsed.tables):
-            if table and table.string:
-                table.string = ''
+    if USE_WIKITEXTPARSER:
+        try:
+            # Parse with wikitextparser
+            parsed = wtp.parse(text)
             
-        # Remove parser functions
-        for pf in list(parsed.parser_functions):
-            if pf and pf.string:
-                pf.string = ''
+            # Remove templates
+            for template in list(parsed.templates):
+                if template and template.string:
+                    template.string = ''
             
-        # Remove comments
-        for comment in list(parsed.comments):
-            if comment and comment.string:
-                comment.string = ''
+            # Remove tables
+            for table in list(parsed.tables):
+                if table and table.string:
+                    table.string = ''
+                
+            # Remove parser functions
+            for pf in list(parsed.parser_functions):
+                if pf and pf.string:
+                    pf.string = ''
+                
+            # Remove comments
+            for comment in list(parsed.comments):
+                if comment and comment.string:
+                    comment.string = ''
+                
+            # Convert wikilinks to plain text
+            for wikilink in list(parsed.wikilinks):
+                if wikilink:
+                    if wikilink.text:
+                        wikilink.string = wikilink.text
+                    elif wikilink.title:
+                        wikilink.string = wikilink.title
+                    else:
+                        wikilink.string = ''
             
-        # Convert wikilinks to plain text
-        for wikilink in list(parsed.wikilinks):
-            if wikilink:
-                if wikilink.text:
-                    wikilink.string = wikilink.text
-                elif wikilink.title:
-                    wikilink.string = wikilink.title
-                else:
-                    wikilink.string = ''
-        
-        # Convert external links to plain text
-        for extlink in list(parsed.external_links):
-            if extlink:
-                extlink.string = extlink.text if extlink.text else ''
-        
-        # Get the plain text
-        plain_text = parsed.string.strip()
-        
-    except Exception as e:
-        print(f"Error parsing wikitext: {e}")
-        # Fallback to regex-based cleaning
-        plain_text = text
-        
-        # Remove templates
-        plain_text = re.sub(r'\{\{[^}]*\}\}', '', plain_text)
-        # Convert internal links [[link|text]] -> text or [[link]] -> link
-        plain_text = re.sub(r'\[\[([^|\]]*\|)?([^\]]*)\]\]', r'\2', plain_text)
-        # Convert external links [http://example.com text] -> text
-        plain_text = re.sub(r'\[http[^\s]* ([^\]]*)\]', r'\1', plain_text)
-        # Remove external links without text [http://example.com]
-        plain_text = re.sub(r'\[http[^\s]*\]', '', plain_text)
+            # Convert external links to plain text
+            for extlink in list(parsed.external_links):
+                if extlink:
+                    extlink.string = extlink.text if extlink.text else ''
+            
+            # Get the plain text
+            plain_text = parsed.string.strip()
+            
+        except Exception as e:
+            print(f"Error parsing wikitext with wikitextparser: {e}")
+            # Fallback to regex-based cleaning
+            plain_text = regex_clean_wikitext(text)
+    else:
+        plain_text = regex_clean_wikitext(text)
+    
+    return plain_text
+
+def regex_clean_wikitext(text):
+    """Fallback regex-based cleaning for wikitext"""
+    plain_text = text
+    
+    # Remove templates
+    plain_text = re.sub(r'\{\{[^}]*\}\}', '', plain_text)
+    # Convert internal links [[link|text]] -> text or [[link]] -> link
+    plain_text = re.sub(r'\[\[([^|\]]*\|)?([^\]]*)\]\]', r'\2', plain_text)
+    # Convert external links [http://example.com text] -> text
+    plain_text = re.sub(r'\[http[^\s]* ([^\]]*)\]', r'\1', plain_text)
+    # Remove external links without text [http://example.com]
+    plain_text = re.sub(r'\[http[^\s]*\]', '', plain_text)
     
     # Additional cleaning for Georgian text
     # Remove bold '''text''' -> text
@@ -127,51 +196,55 @@ def clean_wikitext(text):
     plain_text = re.sub(r'^\s*$', '', plain_text, flags=re.MULTILINE)
     plain_text = re.sub(r'\s+', ' ', plain_text)
     
-    return plain_text
+    return plain_text.strip()
 
 def process_page(page_data):
     """Process a single Wikipedia page"""
-    title, text, page_id, ns = page_data
-    
-    # Skip non-main namespace articles (ns != 0)
-    if ns != '0':
+    try:
+        title, text, page_id, ns = page_data
+        
+        # Skip non-main namespace articles (ns != 0)
+        if ns != '0':
+            return None
+        
+        # Skip redirect pages
+        if text.strip().lower().startswith('#redirect') or text.strip().lower().startswith('#გადამისამართება'):
+            return None
+        
+        # Skip disambiguation pages
+        if 'disambiguation' in title.lower() or 'მრავალმნიშვნელოვანი' in title.lower():
+            return None
+        
+        # Clean the text
+        clean_text = clean_wikitext(text)
+        
+        # Skip if too short (less than 200 characters for Georgian)
+        if len(clean_text) < 200:
+            return None
+        
+        # Skip if mostly non-Georgian characters (basic check)
+        georgian_chars = len(re.findall(r'[ა-ჿ]', clean_text))
+        total_chars = len(re.sub(r'\s', '', clean_text))  # Count non-whitespace chars
+        
+        if total_chars > 0 and georgian_chars < total_chars * 0.3:  # At least 30% Georgian characters
+            return None
+        
+        return {
+            'id': page_id,
+            'title': title,
+            'text': clean_text,
+            'url': f'https://ka.wikipedia.org/wiki/{title.replace(" ", "_")}',
+            'length': len(clean_text)
+        }
+    except Exception as e:
+        print(f"Error processing page {page_data[0] if len(page_data) > 0 else 'unknown'}: {e}")
         return None
-    
-    # Skip redirect pages
-    if text.strip().lower().startswith('#redirect') or text.strip().lower().startswith('#გადამისამართება'):
-        return None
-    
-    # Skip disambiguation pages
-    if 'disambiguation' in title.lower() or 'მრავალმნიშვნელოვანი' in title.lower():
-        return None
-    
-    # Clean the text
-    clean_text = clean_wikitext(text)
-    
-    # Skip if too short (less than 200 characters for Georgian)
-    if len(clean_text) < 200:
-        return None
-    
-    # Skip if mostly non-Georgian characters (basic check)
-    georgian_chars = len(re.findall(r'[ა-ჿ]', clean_text))
-    total_chars = len(re.sub(r'\s', '', clean_text))  # Count non-whitespace chars
-    
-    if total_chars > 0 and georgian_chars < total_chars * 0.3:  # At least 30% Georgian characters
-        return None
-    
-    return {
-        'id': page_id,
-        'title': title,
-        'text': clean_text,
-        'url': f'https://ka.wikipedia.org/wiki/{title.replace(" ", "_")}',
-        'length': len(clean_text)
-    }
 
 def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     """Parse Wikipedia dump file and extract clean text"""
     
     if max_workers is None:
-        max_workers = multiprocessing.cpu_count()
+        max_workers = multiprocessing.cpu_count()  # Limit to 4 to avoid memory issues
     
     print(f"Using {max_workers} processes")
     
@@ -179,131 +252,175 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    # Open the dump file
-    if dump_file_path.endswith('.bz2'):
-        file_handle = bz2.open(dump_file_path, 'rt', encoding='utf-8')
-    else:
-        file_handle = open(dump_file_path, 'r', encoding='utf-8')
+    # Open the dump file with better error handling
+    try:
+        if dump_file_path.endswith('.bz2'):
+            file_handle = bz2.open(dump_file_path, 'rt', encoding='utf-8')
+        else:
+            file_handle = open(dump_file_path, 'r', encoding='utf-8')
+    except Exception as e:
+        print(f"Error opening file: {e}")
+        return 0
     
     pages_processed = 0
     pages_saved = 0
-    batch_size = 500  # Smaller batch size for wikitextparser
+    batch_size = 100  # Smaller batch size for better memory management
     batch_num = 0
     
     try:
         print("Starting XML parsing...")
         # Parse XML iteratively to handle large files 
-        context = ET.iterparse(file_handle, events=('start', 'end')) #Efficient memory usage: reads the XML element-by-element (not whole file).
+        context = ET.iterparse(file_handle, events=('start', 'end'))
         context = iter(context)
-        event, root = next(context)
+        
+        # Skip to root element
+        try:
+            event, root = next(context)
+        except StopIteration:
+            print("Empty XML file")
+            return 0
         
         page_batch = []
         current_page = {}
+        in_page = False
         
         for event, elem in context:
-            if event == 'start':
-                if elem.tag.endswith('page'):
-                    current_page = {}
-            elif event == 'end':
-                if elem.tag.endswith('title'):
-                    current_page['title'] = elem.text or ''
-                elif elem.tag.endswith('id') and 'id' not in current_page:  # Only take the first id (page id, not revision id)
-                    current_page['id'] = elem.text or ''
-                elif elem.tag.endswith('ns'):
-                    current_page['ns'] = elem.text or '0'
-                elif elem.tag.endswith('text'):
-                    current_page['text'] = elem.text or ''
-                elif elem.tag.endswith('page'):
-                    # Page complete, add to batch if it has all required fields
-                    if all(key in current_page for key in ['title', 'text', 'id', 'ns']):
-                        page_batch.append((
-                            current_page['title'],
-                            current_page['text'],
-                            current_page['id'],
-                            current_page['ns']
-                        ))
-                    
-                    # Clear the element to save memory
-                    elem.clear()
-                    if elem != root:
-                        root.clear()
-                    
-                    # Process batch when it reaches batch_size
-                    if len(page_batch) >= batch_size:
-                        print(f"Processing batch {batch_num} with {len(page_batch)} pages...")
+            try:
+                if event == 'start':
+                    if elem.tag.endswith('page'):
+                        current_page = {}
+                        in_page = True
+                elif event == 'end':
+                    if elem.tag.endswith('title') and in_page:
+                        current_page['title'] = elem.text or ''
+                    elif elem.tag.endswith('id') and in_page and 'id' not in current_page:
+                        current_page['id'] = elem.text or ''
+                    elif elem.tag.endswith('ns') and in_page:
+                        current_page['ns'] = elem.text or '0'
+                    elif elem.tag.endswith('text') and in_page:
+                        current_page['text'] = elem.text or ''
+                    elif elem.tag.endswith('page'):
+                        in_page = False
+                        # Page complete, add to batch if it has all required fields
+                        if all(key in current_page for key in ['title', 'text', 'id', 'ns']):
+                            page_batch.append((
+                                current_page['title'],
+                                current_page['text'],
+                                current_page['id'],
+                                current_page['ns']
+                            ))
                         
-                        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                            results = list(executor.map(process_page, page_batch))
+                        # Clear the element to save memory
+                        elem.clear()
+                        if elem != root:
+                            root.clear()
                         
-                        # Save results
-                        valid_results = [r for r in results if r is not None]
-                        if valid_results:
-                            output_file = os.path.join(output_dir, f'georgian_wiki_batch_{batch_num:04d}.jsonl')
-                            with open(output_file, 'w', encoding='utf-8') as f:
-                                for result in valid_results:
-                                    f.write(json.dumps(result, ensure_ascii=False) + '\n')
+                        # Process batch when it reaches batch_size
+                        if len(page_batch) >= batch_size:
+                            print(f"Processing batch {batch_num} with {len(page_batch)} pages...")
                             
-                            pages_saved += len(valid_results)
-                            avg_length = sum(r['length'] for r in valid_results) / len(valid_results)
-                            print(f"Batch {batch_num}: Processed {len(page_batch)} pages, saved {len(valid_results)} valid pages (avg length: {avg_length:.0f} chars)")
-                        else:
-                            print(f"Batch {batch_num}: No valid pages found")
+                            try:
+                                with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                                    results = list(executor.map(process_page, page_batch))
+                                
+                                # Save results
+                                valid_results = [r for r in results if r is not None]
+                                if valid_results:
+                                    output_file = os.path.join(output_dir, f'georgian_wiki_batch_{batch_num:04d}.jsonl')
+                                    with open(output_file, 'w', encoding='utf-8') as f:
+                                        for result in valid_results:
+                                            f.write(json.dumps(result, ensure_ascii=False) + '\n')
+                                    
+                                    pages_saved += len(valid_results)
+                                    avg_length = sum(r['length'] for r in valid_results) / len(valid_results)
+                                    print(f"Batch {batch_num}: Processed {len(page_batch)} pages, saved {len(valid_results)} valid pages (avg length: {avg_length:.0f} chars)")
+                                else:
+                                    print(f"Batch {batch_num}: No valid pages found")
+                                
+                                pages_processed += len(page_batch)
+                                page_batch = []
+                                batch_num += 1
+                                
+                            except Exception as e:
+                                print(f"Error processing batch {batch_num}: {e}")
+                                traceback.print_exc()
+                                page_batch = []
+                                batch_num += 1
+                    else:
+                        # Clear processed elements to save memory
+                        elem.clear()
                         
-                        pages_processed += len(page_batch)
-                        page_batch = []
-                        batch_num += 1
-                else:
-                    # Clear processed elements to save memory
-                    elem.clear()
+            except Exception as e:
+                print(f"Error parsing XML element: {e}")
+                continue
         
         # Process remaining pages
         if page_batch:
             print(f"Processing final batch with {len(page_batch)} pages...")
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                results = list(executor.map(process_page, page_batch))
-            
-            valid_results = [r for r in results if r is not None]
-            if valid_results:
-                output_file = os.path.join(output_dir, f'georgian_wiki_batch_{batch_num:04d}.jsonl')
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    for result in valid_results:
-                        f.write(json.dumps(result, ensure_ascii=False) + '\n')
+            try:
+                with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                    results = list(executor.map(process_page, page_batch))
                 
-                pages_saved += len(valid_results)
-                avg_length = sum(r['length'] for r in valid_results) / len(valid_results)
-                print(f"Final batch: Processed {len(page_batch)} pages, saved {len(valid_results)} valid pages (avg length: {avg_length:.0f} chars)")
+                valid_results = [r for r in results if r is not None]
+                if valid_results:
+                    output_file = os.path.join(output_dir, f'georgian_wiki_batch_{batch_num:04d}.jsonl')
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        for result in valid_results:
+                            f.write(json.dumps(result, ensure_ascii=False) + '\n')
+                    
+                    pages_saved += len(valid_results)
+                    avg_length = sum(r['length'] for r in valid_results) / len(valid_results)
+                    print(f"Final batch: Processed {len(page_batch)} pages, saved {len(valid_results)} valid pages (avg length: {avg_length:.0f} chars)")
+            except Exception as e:
+                print(f"Error processing final batch: {e}")
+                traceback.print_exc()
     
     except Exception as e:
         print(f"Error during parsing: {e}")
-        raise
+        traceback.print_exc()
     finally:
         file_handle.close()
     
     print(f"Extraction complete! Processed {pages_processed} pages, saved {pages_saved} valid Georgian pages")
     
-    # Create a combined file
-    combined_file = os.path.join(output_dir, 'georgian_wikipedia_dataset.jsonl')
+    # Create a combined file - FIXED
+    combined_file = os.path.join(output_dir, 'georgian_wiki_dataset.jsonl')
     print(f"Creating combined dataset file: {combined_file}")
     
-    with open(combined_file, 'w', encoding='utf-8') as combined:
-        batch_files = [f for f in os.listdir(output_dir) if f.startswith('georgian_wiki_batch_') and f.endswith('.jsonl')]
-        batch_files.sort()
+    try:
+        with open(combined_file, 'w', encoding='utf-8') as combined:
+            batch_files = [f for f in os.listdir(output_dir) if f.startswith('georgian_wiki_batch_') and f.endswith('.jsonl')]
+            batch_files.sort()
+            
+            total_articles = 0
+            total_length = 0
+            
+            for batch_file in batch_files:
+                batch_path = os.path.join(output_dir, batch_file)
+                try:
+                    with open(batch_path, 'r', encoding='utf-8') as batch:
+                        for line in batch:
+                            if line.strip():  # Skip empty lines
+                                combined.write(line)
+                                try:
+                                    data = json.loads(line)
+                                    total_articles += 1
+                                    total_length += data['length']
+                                except json.JSONDecodeError:
+                                    print(f"Warning: Invalid JSON line in {batch_file}")
+                                    continue
+                except Exception as e:
+                    print(f"Error reading batch file {batch_file}: {e}")
+                    continue
         
-        total_articles = 0
-        total_length = 0
+        avg_article_length = total_length / total_articles if total_articles > 0 else 0
+        print(f"Combined dataset created with {total_articles} articles")
+        print(f"Average article length: {avg_article_length:.0f} characters")
+        print(f"Combined file location: {combined_file}")
         
-        for batch_file in batch_files:
-            batch_path = os.path.join(output_dir, batch_file)
-            with open(batch_path, 'r', encoding='utf-8') as batch:
-                for line in batch:
-                    combined.write(line)
-                    data = json.loads(line)
-                    total_articles += 1
-                    total_length += data['length']
-    
-    avg_article_length = total_length / total_articles if total_articles > 0 else 0
-    print(f"Combined dataset created with {total_articles} articles")
-    print(f"Average article length: {avg_article_length:.0f} characters")
+    except Exception as e:
+        print(f"Error creating combined file: {e}")
+        traceback.print_exc()
     
     return pages_saved
 
@@ -315,19 +432,38 @@ if __name__ == "__main__":
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    # Install required packages
+    print("Make sure you have installed:")
+    print("pip install wikitextparser")
+    print("Or the script will fall back to regex-based cleaning")
+    print()
+
     # Run the extraction
-    print("Starting Wikipedia extraction with wikitextparser...")
-    print("Make sure you have installed: pip install wikitextparser")
+    print("Starting Wikipedia extraction...")
 
     try:
-        total_pages = parse_wikipedia_dump(file_path, output_dir, max_workers=cpu_count)
+        total_pages = parse_wikipedia_dump(file_path, output_dir, max_workers=min(cpu_count, 4))
         
         print(f"\n=== EXTRACTION SUMMARY ===")
         print(f"Total valid Georgian articles extracted: {total_pages}")
         print(f"Output directory: {output_dir}")
         print(f"Files created:")
-        print(f"- Individual batch files: georgian_wiki_batch_*.jsonl")
-        print(f"- Combined dataset: georgian_wikipedia_dataset.jsonl")
+        
+        # List actual files created
+        if os.path.exists(output_dir):
+            files = os.listdir(output_dir)
+            batch_files = [f for f in files if f.startswith('georgian_wiki_batch_')]
+            combined_file = 'georgian_wiki_dataset.jsonl'
+            
+            print(f"- {len(batch_files)} batch files: georgian_wiki_batch_*.jsonl")
+            if combined_file in files:
+                file_size = os.path.getsize(os.path.join(output_dir, combined_file))
+                print(f"- Combined dataset: {combined_file} ({file_size:,} bytes)")
+            else:
+                print("- Combined dataset: NOT CREATED (check for errors above)")
+        
         print(f"Ready for fine-tuning!")
+        
     except Exception as e:
         print(f"Error: {e}")
+        traceback.print_exc()
