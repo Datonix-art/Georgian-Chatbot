@@ -1,80 +1,71 @@
-#* 1
-#
-# pip install hf_transfer -q
-import bz2
+""" Imports for downloading and accessing file"""
 import os
-
-"""Environmental variable that fastens downloading models or datasets from hugging face. (Not used)"""
-# os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = "1" 
-
-
-#* 2
-#
+import bz2
 import subprocess
+import sys
 
-def download_with_verification(url, file_path, expected_size=None):
-    """Download file with verification and resume capability"""
+""" Variables """
+url = 'https://dumps.wikimedia.org/kawiki/20250620/kawiki-20250620-pages-articles.xml.bz2'
+file_name = url.split('/')[-1]
+folder_name = os.path.join(os.getcwd(), 'chatbot', 'input')
+os.makedirs(folder_name, exist_ok=True)
+file_path = os.path.join(folder_name, file_name)
+output_dir = os.path.join(os.getcwd(), 'chatbot', 'output')
+os.makedirs(output_dir, exist_ok=True)
+
+#1
+def download_with_verification(url, file_path, max_storage=None):
+    """ Download file with verification and resume capability"""
     if os.path.exists(file_path):
         print(f"File {file_path} already exists. Checking integrity...")
         try:
-            # Test if the file can be opened properly
             if file_path.endswith('.bz2'):
-                import bz2
                 with bz2.open(file_path, 'rt', encoding='utf-8') as f:
                     for i, line in enumerate(f):
-                        if i > 10:  # Read first 10 lines
+                        if i > 10: # read first 10 lines
                             break
-                print("File integrity check passed. Skipping download.")
-                return True
+                print('File integrity check passed.')
+            else:
+                with open(file_path, 'rt', encoding='utf-8') as f:
+                    for i, line in enumerate(f):
+                        if i > 10:
+                            break
+                print('File integrity check passed.')
         except Exception as e:
-            print(f"File integrity check failed: {e}")
-            print("Re-downloading file...")
+            print(f"Error opening the file: {e}. It may be corrupted or missing")
+            print("Re-downloading file.")
             os.remove(file_path)
-    
-    print(f"Downloading {url}...")
-    
-    # Use wget with resume capability if available, otherwise use curl
+        
     try:
-        # Try wget first (better for large files)
-        result = subprocess.run(['wget', '-c', url, '-O', file_path], 
-                              capture_output=True, text=True)
-        if result.returncode != 0:
-            raise Exception("wget failed")
-    except:
-        # Fallback to curl
-        print("Using curl for download...")
-        result = subprocess.run(['curl', '-L', '-C', '-', url, '-o', file_path], 
-                              capture_output=True, text=True)
+        """ Install file from specified url with wget or with curl """
+        result = subprocess.run(['wget', '-c', url, '-O', file_path], capture_output=True, text=True) # capture_output enables debugging parameters for result. 
+        if result.returncode != 0: 
+            raise Exception('wget failed') 
+    except Exception as e:
+        print("Trying to download with curl instead...")
+        result = subprocess.run(['curl', '-L', '-C', '-', url, '-o', file_path], capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Download failed: {result.stderr}")
             return False
-    
-    # Verify download
+
+    """ Verify Download"""
     if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-        print(f"Download completed. File size: {os.path.getsize(file_path)} bytes")
+        print("File has successfully downloaded")
+        print(f"File location at: {folder_name}. File size: {os.path.getsize(file_path)} bytes.")
         return True
     else:
-        print("Download failed - file not found or empty")
+        print("File doesnt exist. File not found or empty.")
         return False
 
-url = 'https://dumps.wikimedia.org/kawiki/20250620/kawiki-20250620-pages-articles.xml.bz2'
-file_name = url.split('/')[-1] # divides url var into parts by removing slash and then [-1] gets last part of divided list that is actuall filename
-folder_name = os.path.join(os.getcwd(), 'chatbot', 'input')
-
-if not os.path.exists(folder_name):
-    os.makedirs(folder_name)
-
-file_path = os.path.join(folder_name, file_name)
-
-# Download with verification
+#2
+""" Validate download """    
 if not download_with_verification(url, file_path):
-    print("Failed to download file. Exiting.")
-    exit(1)
+    print('Failed to download file. Exiting')
+    sys.exit(1)
 
-#* 3
-# debugging - Test file integrity
-
-print("Testing file integrity...")
+#3
+""" Test line integrity of downloaded file"""
+print("testing line integrity")
 try:
     with bz2.open(file_path, 'rt', encoding='utf-8') as f:
         line_count = 0
@@ -88,38 +79,26 @@ try:
 except Exception as e:
     print(f"File integrity test failed: {e}")
     print("Please re-download the file.")
-    exit(1)
+    sys.exit(1)
 
-#* 4
-# pip install wikiextractor wikitextparser
-import multiprocessing
-import xml.etree.ElementTree as ET # or import defusedxml.ElementTree as ET if untrusted XML file (!pip install defusedxml)
+#4
+""" Imports for cleaning wikitext"""
+""" Use wikitextparser if available or else use regex-based cleaning"""
 import re
-from concurrent.futures import ProcessPoolExecutor
-import json
-import traceback
-
-# Try to import wikitextparser, fallback to regex if not available
 try:
     import wikitextparser as wtp
     USE_WIKITEXTPARSER = True
-    print("Using wikitextparser for text cleaning")
+    print('Using wikitextparser for text cleaning')
 except ImportError:
     USE_WIKITEXTPARSER = False
-    print("wikitextparser not available, using regex-based cleaning")
-    print("Install with: pip install wikitextparser")
+    print('wikitextparser library is not available, using regex-based cleaning')
 
+#5
 def clean_wikitext(text):
-    """Clean wikitext markup using wikitextparser to extract plain text"""
+    """ Clean wikitext markup using WikiTextParser to extract plain text"""
     if USE_WIKITEXTPARSER:
         try:
-            # Parse with wikitextparser
             parsed = wtp.parse(text)
-            
-            # Remove templates
-            for template in list(parsed.templates):
-                if template and template.string:
-                    template.string = ''
             
             # Remove tables
             for table in list(parsed.tables):
@@ -135,8 +114,8 @@ def clean_wikitext(text):
             for comment in list(parsed.comments):
                 if comment and comment.string:
                     comment.string = ''
-                
-            # Convert wikilinks to plain text
+
+           # Convert wikitext to plain text
             for wikilink in list(parsed.wikilinks):
                 if wikilink:
                     if wikilink.text:
@@ -145,27 +124,28 @@ def clean_wikitext(text):
                         wikilink.string = wikilink.title
                     else:
                         wikilink.string = ''
-            
-            # Convert external links to plain text
+           
+            # Conert external links to plain text
             for extlink in list(parsed.external_links):
                 if extlink:
                     extlink.string = extlink.text if extlink.text else ''
-            
-            # Get the plain text
+             
+            # get plain text
+
             plain_text = parsed.string.strip()
-            
+                
+            return plain_text    
         except Exception as e:
-            print(f"Error parsing wikitext with wikitextparser: {e}")
-            # Fallback to regex-based cleaning
+            print(f'Error parsing text from wikitextparser: {e}')
             plain_text = regex_clean_wikitext(text)
     else:
         plain_text = regex_clean_wikitext(text)
-    
-    return plain_text
 
 def regex_clean_wikitext(text):
-    """Fallback regex-based cleaning for wikitext"""
+    """ Fallback regex-based cleaning for wikitext"""
     plain_text = text
+   
+    #* re.sub() function replaces one or many matches with a string
     
     # Remove templates
     plain_text = re.sub(r'\{\{[^}]*\}\}', '', plain_text)
@@ -199,12 +179,13 @@ def regex_clean_wikitext(text):
     
     return plain_text.strip()
 
+#6
 def process_page(page_data):
-    """Process a single Wikipedia page"""
+    """ Process single wikipedia page"""
     try:
         title, text, page_id, ns = page_data
-        
-        # Skip non-main namespace articles (ns != 0)
+
+        # Skip non namespace articles
         if ns != '0':
             return None
         
@@ -218,8 +199,8 @@ def process_page(page_data):
         
         # Clean the text
         clean_text = clean_wikitext(text)
-        
-        # Skip if too short (less than 200 characters for Georgian)
+
+        # Skip if cleaned text size will be less then 200
         if len(clean_text) < 200:
             return None
         
@@ -229,44 +210,51 @@ def process_page(page_data):
         
         if total_chars > 0 and georgian_chars < total_chars * 0.3:  # At least 30% Georgian characters
             return None
-        
+      
         return {
             'id': page_id,
             'title': title,
             'text': clean_text,
             'url': f'https://ka.wikipedia.org/wiki/{title.replace(" ", "_")}',
-            'length': len(clean_text)
+            'len': len(clean_text)
         }
+       
     except Exception as e:
         print(f"Error processing page {page_data[0] if len(page_data) > 0 else 'unknown'}: {e}")
         return None
 
-def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
-    """Parse Wikipedia dump file and extract clean text"""
-    
+#8
+""" Imports for processing wikipedia dump file and creating ready jsonl files"""    
+import multiprocessing 
+import xml.etree.ElementTree as ET # Module implements simple and efficient API for parsing and creating XML data (ese ET only with trusted xml files)
+from concurrent.futures import ProcessPoolExecutor
+import traceback
+import json
+
+#7    
+def process_wiki_dump(dump_file_path, output_dir, max_workers=None):
+    """Parse wiki dump file and extract clean text"""
     if max_workers is None:
-        max_workers = multiprocessing.cpu_count()  # Limit to 4 to avoid memory issues
-    
-    print(f"Using {max_workers} processes")
-    
-    # Create output directory
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    
-    # Open the dump file with better error handling
+        max_workers = multiprocessing.cpu_count()
+
+    print(f'Using {max_workers} processes.')
+
+    os.makedirs(output_dir, exist_ok=True) # Create output directory
+     
+    # Open the dump file and assing it to variable
     try:
         if dump_file_path.endswith('.bz2'):
             file_handle = bz2.open(dump_file_path, 'rt', encoding='utf-8')
         else:
-            file_handle = open(dump_file_path, 'r', encoding='utf-8')
+            file_handle = open(dump_file_path, 'rt', encoding='utf-8')
     except Exception as e:
         print(f"Error opening file: {e}")
         return 0
     
-    pages_processed = 0
-    pages_saved = 0
-    batch_size = 100  # Smaller batch size for better memory management
-    batch_num = 0
+    pages_processed = 0  # Counts how many pages have been read and processed
+    pages_saved = 0 # Counts how many pages have been saved (Some might have been filtered/deleted )
+    batch_size = 100 # Defines how many pages you want to process at once
+    batch_num = 0 # Tracks current batch numbers
     
     try:
         print("Starting XML parsing...")
@@ -333,7 +321,7 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
                                             f.write(json.dumps(result, ensure_ascii=False) + '\n')
                                     
                                     pages_saved += len(valid_results)
-                                    avg_length = sum(r['length'] for r in valid_results) / len(valid_results)
+                                    avg_length = sum(r['len'] for r in valid_results) / len(valid_results)
                                     print(f"Batch {batch_num}: Processed {len(page_batch)} pages, saved {len(valid_results)} valid pages (avg length: {avg_length:.0f} chars)")
                                 else:
                                     print(f"Batch {batch_num}: No valid pages found")
@@ -425,31 +413,26 @@ def parse_wikipedia_dump(dump_file_path, output_dir, max_workers=None):
     
     return pages_saved
 
+#8
+"""run file"""
 if __name__ == "__main__":
     multiprocessing.freeze_support()
     cpu_count = multiprocessing.cpu_count()
     print(f'Number of available CPU cores: {cpu_count}')
-    output_dir = os.path.join(os.getcwd(), 'chatbot', 'output')
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
 
-    # Install required packages
+    # install required packages
     print("Make sure you have installed:")
     print("pip install wikitextparser")
     print("Or the script will fall back to regex-based cleaning")
-    print()
 
-    # Run the extraction
-    print("Starting Wikipedia extraction...")
-
+    # run extraction
     try:
-        total_pages = parse_wikipedia_dump(file_path, output_dir, max_workers=min(cpu_count, 4))
-        
+        total_pages = process_wiki_dump(file_path, output_dir, max_workers=cpu_count)
+
         print(f"\n=== EXTRACTION SUMMARY ===")
         print(f"Total valid Georgian articles extracted: {total_pages}")
         print(f"Output directory: {output_dir}")
         print(f"Files created:")
-        
         # List actual files created
         if os.path.exists(output_dir):
             files = os.listdir(output_dir)
