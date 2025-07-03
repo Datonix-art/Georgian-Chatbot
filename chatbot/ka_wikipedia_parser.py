@@ -1,6 +1,7 @@
 #* 1
 #
 # pip install hf_transfer -q
+import bz2
 import os
 
 """Environmental variable that fastens downloading models or datasets from hugging face. (Not used)"""
