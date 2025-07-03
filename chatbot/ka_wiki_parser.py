@@ -25,12 +25,14 @@ def download_with_verification(url, file_path, max_storage=None):
                         if i > 10: # read first 10 lines
                             break
                 print('File integrity check passed.')
+                return True
             else:
                 with open(file_path, 'rt', encoding='utf-8') as f:
                     for i, line in enumerate(f):
                         if i > 10:
                             break
                 print('File integrity check passed.')
+                return True
         except Exception as e:
             print(f"Error opening the file: {e}. It may be corrupted or missing")
             print("Re-downloading file.")
