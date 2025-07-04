@@ -334,7 +334,9 @@ def process_wiki_dump(dump_file_path, output_dir, max_workers=None):
                                     with open(output_file, 'w', encoding='utf-8') as f:
                                         for result in valid_results:
                                             f.write(json.dumps(result, ensure_ascii=False) + '\n')
-                                    
+                                    with open(os.path.join(output_dir, 'georgian_wiki_dataset.jsonl'), 'a', encoding='utf-8') as combined:
+                                        for result in valid_results:
+                                            combined.write(json.dumps(result, ensure_ascii=False) + '\n')
                                     pages_saved += len(valid_results)
                                     avg_length = sum(r['len'] for r in valid_results) / len(valid_results)
                                     print(f"Batch {batch_num}: Processed {len(page_batch)} pages, saved {len(valid_results)} valid pages (avg length: {avg_length:.0f} chars)")
@@ -371,6 +373,10 @@ def process_wiki_dump(dump_file_path, output_dir, max_workers=None):
                     with open(output_file, 'w', encoding='utf-8') as f:
                         for result in valid_results:
                             f.write(json.dumps(result, ensure_ascii=False) + '\n')
+
+                    with open(os.path.join(output_dir, 'georgian_wiki_dataset.jsonl'), 'a', encoding='utf-8') as combined:
+                        for result in valid_results:
+                            combined.write(json.dumps(result, ensure_ascii=False) + '\n')
                     
                     pages_saved += len(valid_results)
                     avg_length = sum(r['len'] for r in valid_results) / len(valid_results)
