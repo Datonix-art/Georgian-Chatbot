@@ -2,7 +2,7 @@ from flask_login import UserMixin
 import sqlite3
 import os
 
-database_file =  os.getenv('database_file')
+database_file = os.getenv('database_file')
 
 class User(UserMixin):
     def __init__(self, id_, username, hashed_password=None):

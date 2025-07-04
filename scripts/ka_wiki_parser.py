@@ -7,10 +7,10 @@ import sys
 """ Variables """
 url = 'https://dumps.wikimedia.org/kawiki/20250620/kawiki-20250620-pages-articles.xml.bz2'
 file_name = url.split('/')[-1]
-folder_name = os.path.join(os.getcwd(), 'chatbot', 'input')
+folder_name = os.path.join(os.getcwd(), 'data', 'raw', 'input')
 os.makedirs(folder_name, exist_ok=True)
 file_path = os.path.join(folder_name, file_name)
-output_dir = os.path.join(os.getcwd(), 'chatbot', 'output')
+output_dir = os.path.join(os.getcwd(), 'data', 'raw', 'output')
 os.makedirs(output_dir, exist_ok=True)
 
 #1
