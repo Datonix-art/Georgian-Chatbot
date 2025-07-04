@@ -14,7 +14,7 @@ output_dir = os.path.join(os.getcwd(), 'chatbot', 'output')
 os.makedirs(output_dir, exist_ok=True)
 
 #1
-def download_with_verification(url, file_path, max_storage=None):
+def download_with_verification(url, file_path):
     """ Download file with verification and resume capability"""
     if os.path.exists(file_path):
         print(f"File {file_path} already exists. Checking integrity...")
@@ -25,14 +25,12 @@ def download_with_verification(url, file_path, max_storage=None):
                         if i > 10: # read first 10 lines
                             break
                 print('File integrity check passed.')
-                return True
             else:
                 with open(file_path, 'rt', encoding='utf-8') as f:
                     for i, line in enumerate(f):
                         if i > 10:
                             break
                 print('File integrity check passed.')
-                return True
         except Exception as e:
             print(f"Error opening the file: {e}. It may be corrupted or missing")
             print("Re-downloading file.")
@@ -100,49 +98,16 @@ def clean_wikitext(text):
     """ Clean wikitext markup using WikiTextParser to extract plain text"""
     if USE_WIKITEXTPARSER:
         try:
-            parsed = wtp.parse(text)
-            
-            # Remove tables
-            for table in list(parsed.tables):
-                if table and table.string:
-                    table.string = ''
-                
-            # Remove parser functions
-            for pf in list(parsed.parser_functions):
-                if pf and pf.string:
-                    pf.string = ''
-                
-            # Remove comments
-            for comment in list(parsed.comments):
-                if comment and comment.string:
-                    comment.string = ''
+            plain_text = wtp.parse(wtp.remove_markup(text)).plain_text()
 
-           # Convert wikitext to plain text
-            for wikilink in list(parsed.wikilinks):
-                if wikilink:
-                    if wikilink.text:
-                        wikilink.string = wikilink.text
-                    elif wikilink.title:
-                        wikilink.string = wikilink.title
-                    else:
-                        wikilink.string = ''
-           
-            # Conert external links to plain text
-            for extlink in list(parsed.external_links):
-                if extlink:
-                    extlink.string = extlink.text if extlink.text else ''
-             
-            # get plain text
-
-            plain_text = parsed.string.strip()
-                
-            return plain_text    
+            # apply final clean
+            return further_clean_text(plain_text)    
         except Exception as e:
             print(f'Error parsing text from wikitextparser: {e}')
-            plain_text = regex_clean_wikitext(text)
+            return regex_clean_wikitext(text)
     else:
-        plain_text = regex_clean_wikitext(text)
-
+        return regex_clean_wikitext(text)
+    
 def regex_clean_wikitext(text):
     """ Fallback regex-based cleaning for wikitext"""
     plain_text = text
@@ -179,7 +144,55 @@ def regex_clean_wikitext(text):
     plain_text = re.sub(r'^\s*$', '', plain_text, flags=re.MULTILINE)
     plain_text = re.sub(r'\s+', ' ', plain_text)
     
-    return plain_text.strip()
+    # apply final clean
+    return further_clean_text(plain_text)
+
+def further_clean_text(text):
+    """ Additional cleaning for structural wiki elements and formatting"""
+    
+    # Remove section headers (== text ==)
+    text = re.sub(r'==+\s*[^=]*\s*==+', '', text)
+    
+    # Remove category listings that weren't caught by link removal
+    # Georgian categories
+    text = re.sub(r'კატეგორია:.*?(?=\n|$)', '', text, flags=re.MULTILINE)
+    # English categories
+    text = re.sub(r'Category:.*?(?=\n|$)', '', text, flags=re.MULTILINE)
+    
+    # Remove bullet points and list formatting
+    text = re.sub(r'^\s*\*\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*#\s*', '', text, flags=re.MULTILINE)
+    
+    # Remove table markup remnants
+    text = re.sub(r'\{\|.*?\|\}', '', text, flags=re.DOTALL)
+    
+    # Remove citation remnants and references
+    text = re.sub(r'IMDB,\s*"[^"]*"\s*Credits', '', text)
+    text = re.sub(r'[A-Z]{2,},\s*"[^"]*"\s*[A-Za-z]+', '', text)  # General pattern for citation remnants
+    
+    # Remove standalone sentences that look like captions or references
+    # This is more aggressive - you might want to adjust based on your needs
+    text = re.sub(r'Jobs and a team of engineers visit.*?interface', '', text)
+    
+    # Remove excessive newlines and normalize whitespace
+    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+
+    # Remove JSON escape characters
+    text = text.replace('\\"', '"')  # Convert \" back to "
+    text = text.replace('\\n', ' ')  # Convert \n to space
+    text = text.replace('\\t', ' ')  # Convert \t to space
+    text = text.replace('\\r', '')   # Remove \r
+    
+    # Remove excessive newlines and normalize whitespace
+    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    
+    
+    # Remove leading/trailing whitespace
+    text = text.strip()
+    
+    return text
 
 #6
 def process_page(page_data):
@@ -360,7 +373,7 @@ def process_wiki_dump(dump_file_path, output_dir, max_workers=None):
                             f.write(json.dumps(result, ensure_ascii=False) + '\n')
                     
                     pages_saved += len(valid_results)
-                    avg_length = sum(r['length'] for r in valid_results) / len(valid_results)
+                    avg_length = sum(r['len'] for r in valid_results) / len(valid_results)
                     print(f"Final batch: Processed {len(page_batch)} pages, saved {len(valid_results)} valid pages (avg length: {avg_length:.0f} chars)")
             except Exception as e:
                 print(f"Error processing final batch: {e}")

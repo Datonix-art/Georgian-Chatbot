@@ -23,12 +23,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class GeorgianChatBot:
-    def __init__(self, model_name: str = "xlm-roberta-base"):
+    def __init__(self, model_name: str = ""):
         """
         Initialize Georgian ChatBot
         
         Args:
-            model_name: Pre-trained model name (default: xlm-roberta-base which supports Georgian)
+            model_name: Pre-trained model which supports Georgian (name of model is: ))
         """
         self.model_name = model_name
         self.tokenizer = None
