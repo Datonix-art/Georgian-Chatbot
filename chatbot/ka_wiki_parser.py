@@ -409,7 +409,7 @@ def process_wiki_dump(dump_file_path, output_dir, max_workers=None):
                                 try:
                                     data = json.loads(line)
                                     total_articles += 1
-                                    total_length += data['length']
+                                    total_length += data['len']
                                 except json.JSONDecodeError:
                                     print(f"Warning: Invalid JSON line in {batch_file}")
                                     continue
