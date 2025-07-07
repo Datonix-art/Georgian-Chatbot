@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ka">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ქართული ჩატბოტი</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</head>
+
+<body>
+    <div class="wrapper">
+        <!-- Header -->
+        <header class="header">
+            <div class="title">ქართული ჩატბოტი</div>
+            <nav class="auth-buttons">
+                {% if current_user.is_authenticated %}
+                    <button onclick="window.location.href='/logout'">გამოსვლა</button>
+                {% else %}
+                    <button onclick="window.location.href='/log-in'">შესვლა</button>
+                    <button onclick="window.location.href='/create-account'">რეგისტრაცია</button>
+                {% endif %}
+            </nav>
+        </header>
+
+        <!-- Flash messages -->
+        {% include 'flash_messages.html' %}
+
+        <!-- Chatbot Interface -->
+        <main class="chatbot">
+            <h1 class="chat-title">რითი შემიძლია დაგეხმაროთ?</h1>
+            <form id="chatbot-form" autocomplete="off">
+                <div class="input-container">
+                    <input type="text" id="question" name="question" placeholder="იკითხეთ რაც გნებავთ..." required>
+                    <button type="submit" id="submit-btn">გაგზავნა</button>
+                </div>
+            </form>
+            <section id="answer" class="chat-response"></section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>
+                ჩატბოტის გამოყენებით ეთანხმებით ჩვენს 
+                <a href="#">პირობებს</a> და <a href="#">წესებს</a>.
+            </p>
+        </footer>
+    </div>
+</body>
+
+</html>

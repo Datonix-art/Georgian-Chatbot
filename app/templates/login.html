@@ -9,16 +9,19 @@
 </head>
 
 <body>
+    <!-- Flash messages -->
+    {% include 'flash_messages.html' %}
+
     <div class="container" id="form-container">
         <h2 id="form-title">Login</h2>
-        <form id="auth-form" method="post" action="{{url_for('login_account')}}">
+        <form id="auth-form" method="post">
             <input type="text" id="username" name="username" placeholder="Username" required />
             <input type="password" id="password" name="password" placeholder="Password" required />
             <button type="submit" id="submit-button">Login</button>
         </form>
         <div class="toggle">
             <span id="toggle-text">Don't have an account? </span>
-            <a href="/create-account">Sign up</a>
+            <a href="{{ url_for('auth_bp.signup') }}">Sign up</a>
         </div>
     </div>
 </body>

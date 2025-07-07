@@ -242,7 +242,7 @@ def process_page(page_data):
 """ Imports for processing wikipedia dump file and creating ready jsonl files"""    
 import multiprocessing 
 import xml.etree.ElementTree as ET # Module implements simple and efficient API for parsing and creating XML data (ese ET only with trusted xml files)
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor # for launching parallel tasks 
 import traceback
 import json
 

@@ -4,15 +4,15 @@ Process Georgian Wikipedia data and create Q&A dataset for fine-tuning
 import json
 import random
 import re
-from pathlib import Path
+from pathlib import Path # for handling file paths
 from typing import List, Dict, Tuple
-import pandas as pd
-from tqdm import tqdm
-import nltk
-from transformers import AutoTokenizer
-import os
+import pandas as pd # for saving data as csv
+from tqdm import tqdm # for progress bars
+import nltk # for NLP tools
+from transformers import AutoTokenizer # for token length checking
+import os # for os path operations
 
-# Download required NLTK data
+# Download required NLTK data for sentence splitting
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
@@ -25,7 +25,7 @@ class GeorgianQADataProcessor:
         self.output_dir.mkdir(exist_ok=True)
         
         # Initialize tokenizer for length checking
-        self.tokenizer = AutoTokenizer.from_pretrained("google/mt5-small")
+        self.tokenizer = AutoTokenizer.from_pretrained("google/mt5-small") 
         
         # Georgian question patterns
         self.question_patterns = [

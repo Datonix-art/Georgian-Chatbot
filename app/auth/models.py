@@ -14,7 +14,7 @@ class User(UserMixin):
     def get(user_id):
         conn = sqlite3.connect(database_file)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, password FROM users WHERE id = ?", (user_id, ))
+        cursor.execute("SELECT id, username, password FROM User WHERE id = ?", (user_id, ))
         row = cursor.fetchone()
         conn.close()
         if row:
@@ -25,10 +25,14 @@ class User(UserMixin):
     def find_by_username(username):
         conn = sqlite3.connect(database_file)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, password FROM users WHERE username = ?", (username, ))
+        cursor.execute("SELECT id, username, password FROM User WHERE username = ?", (username, ))
         row = cursor.fetchone()
         conn.close()
         if row:
             return User(*row)
         return None
 
+    
+    
+    
+    
