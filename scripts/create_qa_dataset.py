@@ -24,7 +24,7 @@ class GeorgianQADataProcessor:
         self.output_dir.mkdir(exist_ok=True)
         
         # Initialize tokenizer for length checking
-        self.tokenizer = AutoTokenizer.from_pretrained("google/mt5-small") 
+        self.tokenizer = AutoTokenizer.from_pretrained("google/mt5-small", use_fast=False) 
         
         # Georgian question patterns
         self.question_patterns = [
@@ -153,9 +153,10 @@ class GeorgianQADataProcessor:
         train_size = int(0.8 * total_size)
         val_size = int(0.1 * total_size)
         
-        train_data = qa_dataset[:train_size]
-        val_data = qa_dataset[train_size:train_size + val_size]
-        test_data = qa_dataset[train_size + val_size:]
+        """ training config """
+        train_data = qa_dataset[:train_size] # the data from which it actually learns
+        val_data = qa_dataset[train_size:train_size + val_size] # the data from which model is being tested
+        test_data = qa_dataset[train_size + val_size:] # the data from which the tuned model is being tested / final process
         
         # Save as JSONL
         splits = {
@@ -163,7 +164,7 @@ class GeorgianQADataProcessor:
             'validation': val_data,
             'test': test_data
         }
-        
+
         for split_name, data in splits.items():
             # JSONL format
             jsonl_path = self.output_dir / f'georgian_qa_{split_name}.jsonl'

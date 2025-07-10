@@ -9,3 +9,8 @@ nltk
 datasets
 evaluate
 pandas
+wikitextparser
+protobuf
+tiktoken
+blobfile
+huggingface-hub
