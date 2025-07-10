@@ -6,7 +6,6 @@ import random
 import re
 from pathlib import Path # for handling file paths
 from typing import List, Dict, Tuple
-import pandas as pd # for saving data as csv
 from tqdm import tqdm # for progress bars
 import nltk # for NLP tools
 from transformers import AutoTokenizer # for token length checking
@@ -171,10 +170,6 @@ class GeorgianQADataProcessor:
             with open(jsonl_path, 'w', encoding='utf-8') as f:
                 for item in data:
                     f.write(json.dumps(item, ensure_ascii=False) + '\n')
-            
-            # CSV format for easy viewing
-            csv_path = self.output_dir / f'georgian_qa_{split_name}.csv'
-            pd.DataFrame(data).to_csv(csv_path, index=False, encoding='utf-8')
             
             print(f"Saved {len(data)} {split_name} examples to {jsonl_path}")
         

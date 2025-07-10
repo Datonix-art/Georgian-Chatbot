@@ -1,33 +1,11 @@
-# web
 flask
-flask-cors
 flask-login
-
-# ML core
+flask-cors
+python-dotenv
 torch
 transformers
+tqdm
+nltk
 datasets
-tokenizers
-
-# data processing
-scikit-learn
-pandas
-numpy
-
-# db
-sqlite3
-
-# env vars
-python-dotenv
-
-# training
-accelerate
 evaluate
-
-# performance
-sentencepiece
-
-# dev
-jupyter
-matplotlib
-seaborn
+pandas
