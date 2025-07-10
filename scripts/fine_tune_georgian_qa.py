@@ -22,7 +22,7 @@ os.makedirs(os.path.join(os.getcwd(), 'models', 'georgian-qa-mt5'), exist_ok=Tru
 
 @dataclass
 class TrainingConfig:
-    model_name: str = "google/mt5-base"
+    model_name: str = "google/mt5-small"
     output_dir: str = os.path.join(os.getcwd(), 'models', 'georgian-qa-mt5')
     data_dir: str = os.path.join(os.getcwd(), 'data', 'processed')
     
@@ -92,22 +92,14 @@ class GeorgianQATrainer:
         self.datasets = DatasetDict(datasets)
     
     def preprocess_function(self, examples):
-        inputs = []
-        targets = []
-        
-        for i in range(len(examples['question'])):
-            input_text = f"<კითხვა> {examples['question'][i]} <კონტექსტი> {examples['context'][i][:300]}"
-            inputs.append(input_text)
-            
-            target_text = f"<პასუხი> {examples['answer'][i]} <დასასრული>"
-            targets.append(target_text)
+        inputs = examples['input_text']
+        targets = examples['target_text']
         
         model_inputs = self.tokenizer(
             inputs,
             max_length=self.config.max_source_length,
             truncation=True,
             padding=True,
-            return_tensors="pt"
         )
         
         with self.tokenizer.as_target_tokenizer():
@@ -116,7 +108,6 @@ class GeorgianQATrainer:
                 max_length=self.config.max_target_length,
                 truncation=True,
                 padding=True,
-                return_tensors="pt"
             )
         
         model_inputs["labels"] = labels["input_ids"]
@@ -134,29 +125,67 @@ class GeorgianQATrainer:
     
     def compute_metrics(self, eval_pred):
         predictions, labels = eval_pred
+
+        # Handle -100 labels (padding tokens)
         labels = [[token for token in label if token != -100] for label in labels]
+
+        # Decode predictions and labels
         decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
         decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
-        
+
+        # Filter out empty predictions and labels
+        valid_pairs = []
+        for pred, label in zip(decoded_preds, decoded_labels):
+            pred_clean = pred.strip()
+            label_clean = label.strip()
+            if pred_clean and label_clean:  # Only include non-empty pairs
+                valid_pairs.append((pred_clean, label_clean))
+
+        if not valid_pairs:
+            print("Warning: No valid prediction-label pairs found!")
+            return {
+                "rouge1": 0.0,
+                "rouge2": 0.0,
+                "rougeL": 0.0,
+                "bleu": 0.0
+            }
+
+        # Separate predictions and labels
+        valid_preds, valid_labels = zip(*valid_pairs)
+
+        # Initialize metrics
         rouge = evaluate.load("rouge")
         bleu = evaluate.load("bleu")
-        
-        rouge_result = rouge.compute(
-            predictions=decoded_preds,
-            references=decoded_labels,
-            use_stemmer=True
-        )
-        
-        bleu_result = bleu.compute(
-            predictions=decoded_preds,
-            references=[[ref] for ref in decoded_labels]
-        )
-        
+
+        # Compute ROUGE
+        try:
+            rouge_result = rouge.compute(
+                predictions=valid_preds,
+                references=valid_labels,
+                use_stemmer=True
+            )
+        except Exception as e:
+            print(f"Error computing ROUGE: {e}")
+            rouge_result = {"rouge1": 0.0, "rouge2": 0.0, "rougeL": 0.0}
+
+        # Compute BLEU with error handling
+        try:
+            bleu_result = bleu.compute(
+                predictions=valid_preds,
+                references=[[ref] for ref in valid_labels]
+            )
+            bleu_score = bleu_result["bleu"]
+        except Exception as e:
+            print(f"Error computing BLEU: {e}")
+            bleu_score = 0.0
+
+        print(f"Evaluated {len(valid_pairs)} valid pairs out of {len(decoded_preds)} total")
+
         return {
             "rouge1": rouge_result["rouge1"],
             "rouge2": rouge_result["rouge2"],
             "rougeL": rouge_result["rougeL"],
-            "bleu": bleu_result["bleu"]
+            "bleu": bleu_score
         }
     
     def train(self):
@@ -181,8 +210,8 @@ class GeorgianQATrainer:
             
             save_total_limit=3,
             load_best_model_at_end=True,
-            eval_strategy=IntervalStrategy.STEPS or "steps",  
-            save_strategy=IntervalStrategy.STEPS or "steps",
+            eval_strategy="steps",  
+            save_strategy="steps",
             metric_for_best_model="eval_rouge1",
             greater_is_better=True,
             
@@ -203,7 +232,7 @@ class GeorgianQATrainer:
             model=self.model,
             args=training_args,
             train_dataset=tokenized_datasets["train"],
-            eval_dataset=tokenized_datasets["validation"],
+            eval_dataset=tokenized_datasets["validation"] if "validation" in tokenized_datasets else None,
             tokenizer=self.tokenizer,
             data_collator=data_collator,
             compute_metrics=self.compute_metrics,
