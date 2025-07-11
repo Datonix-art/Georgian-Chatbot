@@ -274,7 +274,7 @@ def process_wiki_dump(dump_file_path, output_dir, max_workers=None):
     try:
         print("Starting XML parsing...")
         # Parse XML iteratively to handle large files 
-        context = ET.iterparse(file_handle, events=('start', 'end'))
+        context = ET.iterparse(file_handle, events=('start', 'end')) # avoids loading full XML into memory
         context = iter(context)
         
         # Skip to root element

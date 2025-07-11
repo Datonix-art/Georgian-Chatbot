@@ -14,3 +14,4 @@ protobuf
 tiktoken
 blobfile
 huggingface-hub
+sentencepiece

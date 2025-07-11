@@ -14,7 +14,6 @@ from transformers import (
     Seq2SeqTrainer,
     DataCollatorForSeq2Seq,
     EarlyStoppingCallback,
-    IntervalStrategy,
 )
 import evaluate
 
@@ -27,21 +26,21 @@ class TrainingConfig:
     data_dir: str = os.path.join(os.getcwd(), 'data', 'processed')
     
     # Training parameters
-    num_epochs: int = 3
-    batch_size: int = 8
-    learning_rate: float = 5e-5
-    warmup_steps: int = 500
-    max_source_length: int = 512
-    max_target_length: int = 256
-    
+    num_epochs: int = 3 # Number of times to go over the entire dataset.
+    batch_size: int = 8 # Number of samples processed at once per device (GPU/CPU).
+    learning_rate: float = 5e-5 
+    warmup_steps: int = 500 # Number of steps to slowly increase the learning rate to the specified value (helps stabilize training).
+    max_source_length: int = 512 # Max token length in input text
+    max_target_length: int = 256 # max token length in output text
+
     # Evaluation
-    eval_steps: int = 500
-    save_steps: int = 1000
-    logging_steps: int = 100
+    eval_steps: int = 500 # how often ran evalation during training
+    save_steps: int = 1000 # how often to save model checkpoints
+    logging_steps: int = 100 # how often to log training progress
     
     # Hardware
-    use_cuda: bool = True
-    gradient_accumulation_steps: int = 2
+    use_cuda: bool = True # where to use GPU
+    gradient_accumulation_steps: int = 2 # How many steps to accumulate gradients before updating weights. Helps simulate larger batches.
 
 class GeorgianQATrainer:
     def __init__(self, config: TrainingConfig):
@@ -215,7 +214,7 @@ class GeorgianQATrainer:
             metric_for_best_model="eval_rouge1",
             greater_is_better=True,
             
-            predict_with_generate=True,
+            predict_with_generate=True, 
             generation_max_length=self.config.max_target_length,
             remove_unused_columns=False,
             push_to_hub=False,
