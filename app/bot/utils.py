@@ -3,7 +3,7 @@ Utility functions for Georgian Q&A chatbot
 """
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from typing import List, Dict, Optional
+from typing import Dict
 import json
 import re
 import os
@@ -228,7 +228,7 @@ class GeorgianQABot:
             }
 
 # Utility functions for the Flask app
-def create_qa_bot(model_path: str = "models/georgian-qa-mt5") -> GeorgianQABot:
+def create_qa_bot(model_path: str = os.path.join(os.getcwd(), 'models', 'georgian-qa-mt5')) -> GeorgianQABot:
     """Create and return a Georgian Q&A bot instance"""
     try:
         return GeorgianQABot(model_path)
